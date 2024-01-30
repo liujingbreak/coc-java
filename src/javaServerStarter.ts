@@ -39,6 +39,7 @@ export function prepareExecutable(requirements: RequirementsData, workspacePath,
   executable.options = options
   executable.command = path.resolve(`${requirements.tooling_jre}/bin/java`)
   executable.args = prepareParams(requirements, javaConfig, workspacePath, context, isSyntaxServer)
+  context.logger.info(`Starting Java server with: ${executable.command} ${executable.args.join(' ')}`);
   createLogger().info(`Starting Java server with: ${executable.command} ${executable.args.join(' ')}`)
   return executable
 }
@@ -162,7 +163,7 @@ function prepareParams(requirements: RequirementsData, javaConfiguration, worksp
   let configDir = isSyntaxServer ? 'config_ss_win' : 'config_win'
   if (process.platform === 'darwin') {
     configDir = isSyntaxServer ? 'config_ss_mac' : 'config_mac'
-  } else if (process.platform === 'linux') {
+  } else if (process.platform === 'linux' || process.platform === 'android') {
     configDir = isSyntaxServer ? 'config_ss_linux' : 'config_linux'
   }
   params.push('-configuration')

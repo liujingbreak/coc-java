@@ -6,7 +6,7 @@ import * as fse from 'fs-extra'
 import { findRuntimes, getRuntime, getSources, IJavaRuntime, JAVAC_FILENAME } from 'jdk-utils'
 import * as path from 'path'
 import { Commands } from './commands'
-import { checkAndDownloadJRE } from './jre'
+// import { checkAndDownloadJRE } from './jre'
 import { createLogger } from './log'
 import { checkJavaPreferences } from './settings'
 
@@ -20,12 +20,6 @@ export interface RequirementsData {
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
-interface ErrorData {
-  message: string
-  label: string
-  command: string
-  commandParam: any
-}
 /**
  * Resolves the requirements needed to run the extension.
  * Returns a promise that will resolve to a RequirementsData if
@@ -34,8 +28,10 @@ interface ErrorData {
  *
  */
 export async function resolveRequirements(context: ExtensionContext): Promise<RequirementsData> {
-  let toolingJre: string = await checkAndDownloadJRE(context)
-  let toolingJreVersion: number = await getMajorVersion(toolingJre)
+  // let toolingJre = await checkAndDownloadJRE(context)
+  // let toolingJreVersion = await getMajorVersion(toolingJre)
+  let toolingJreVersion = 0;
+  let toolingJre: string | undefined = undefined;
   return new Promise(async (resolve, reject) => {
     const javaPreferences = await checkJavaPreferences(context)
     const preferenceName = javaPreferences.preference
@@ -44,11 +40,11 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
     if (javaHome) {
       const source = `${preferenceName} variable defined in coc-settings.json`
       javaHome = expandHomeDir(javaHome)
-      if (!await fse.pathExists(javaHome)) {
+      if (!await fse.pathExists(javaHome!)) {
         invalidJavaHome(reject, `The ${source} points to a missing or inaccessible folder (${javaHome})`)
-      } else if (!await fse.pathExists(path.resolve(javaHome, 'bin', JAVAC_FILENAME))) {
+      } else if (!await fse.pathExists(path.resolve(javaHome!, 'bin', JAVAC_FILENAME))) {
         let msg: string
-        if (await fse.pathExists(path.resolve(javaHome, JAVAC_FILENAME))) {
+        if (await fse.pathExists(path.resolve(javaHome!, JAVAC_FILENAME))) {
           msg = `'bin' should be removed from the ${source} (${javaHome})`
         } else {
           msg = `The ${source} (${javaHome}) does not point to a JDK.`
@@ -58,8 +54,8 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
       javaVersion = await getMajorVersion(javaHome)
       if (preferenceName === "java.jdt.ls.java.home" || !toolingJre) {
         if (javaVersion >= REQUIRED_JDK_VERSION) {
-          toolingJre = javaHome
-          toolingJreVersion = javaVersion
+          toolingJre = javaHome ?? '';
+          toolingJreVersion = javaVersion ?? '';
         } else {
           const neverShow: boolean | undefined = context.workspaceState.get<boolean>("java.home.failsMinRequiredFirstTime")
           if (!neverShow) {
@@ -75,11 +71,11 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
     if (!toolingJre) { // universal version
       // as latest version as possible.
       sortJdksByVersion(javaRuntimes)
-      const validJdks = javaRuntimes.filter(r => r.version.major >= REQUIRED_JDK_VERSION)
+      const validJdks = javaRuntimes.filter(r => (r.version?.major ?? 0)  >= REQUIRED_JDK_VERSION)
       if (validJdks.length > 0) {
         sortJdksBySource(validJdks)
         javaHome = validJdks[0].homedir
-        javaVersion = validJdks[0].version.major
+        javaVersion = validJdks[0].version?.major ?? 0
         toolingJre = javaHome
         toolingJreVersion = javaVersion
       }
@@ -96,7 +92,7 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
       } else if (javaRuntimes.length) {
         sortJdksBySource(javaRuntimes)
         javaHome = javaRuntimes[0].homedir
-        javaVersion = javaRuntimes[0].version?.major
+        javaVersion = javaRuntimes[0].version?.major ?? 0
         createLogger().info(`Use the JDK from '${getSources(javaRuntimes[0])}' as the initial default project JDK.`)
       } else if (javaHome = await findDefaultRuntimeFromSettings()) {
         javaVersion = await getMajorVersion(javaHome)
@@ -112,9 +108,9 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
 
     /* eslint-disable @typescript-eslint/naming-convention */
     resolve({
-      tooling_jre: toolingJre,
-      tooling_jre_version: toolingJreVersion,
-      java_home: javaHome,
+      tooling_jre: toolingJre ?? '',
+      tooling_jre_version: toolingJreVersion ?? 0,
+      java_home: javaHome ?? '',
       java_version: javaVersion,
     })
     /* eslint-enable @typescript-eslint/naming-convention */
@@ -124,7 +120,7 @@ export async function resolveRequirements(context: ExtensionContext): Promise<Re
 async function findDefaultRuntimeFromSettings(): Promise<string | undefined> {
   const runtimes = workspace.getConfiguration().get("java.configuration.runtimes")
   if (Array.isArray(runtimes) && runtimes.length) {
-    let candidate: string
+    let candidate: string | undefined;
     for (const runtime of runtimes) {
       if (!runtime || typeof runtime !== 'object' || !runtime.path) {
         continue
@@ -217,7 +213,7 @@ function invalidJavaHome(reject, cause: string) {
   }
 }
 
-async function getMajorVersion(javaHome: string): Promise<number> {
+async function getMajorVersion(javaHome: string | undefined): Promise<number> {
   if (!javaHome) {
     return 0
   }

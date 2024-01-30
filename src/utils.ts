@@ -1,6 +1,6 @@
 'use strict'
-
-import { commands, Position, Range, Uri, workspace, WorkspaceConfiguration } from 'coc.nvim'
+import glob from 'glob';
+import { commands, Position, Range, Uri, workspace, WorkspaceConfiguration, ExtensionContext } from 'coc.nvim'
 import * as fs from 'fs'
 import * as path from 'path'
 import { Commands } from './commands'
@@ -130,9 +130,9 @@ export async function getAllJavaProjects(excludeDefaultProject: boolean = true):
   return projectUris
 }
 
-export async function hasBuildToolConflicts(): Promise<boolean> {
-  const projectConfigurationUris: Uri[] = await getBuildFilesInWorkspace()
-  const projectConfigurationFsPaths: string[] = projectConfigurationUris.map((uri) => uri.fsPath)
+export async function hasBuildToolConflicts(context: ExtensionContext): Promise<boolean> {
+  // const projectConfigurationUris: Uri[] = await getBuildFilesInWorkspace(context)
+  const projectConfigurationFsPaths: string[] = await getBuildFilesInWorkspace(context)
   const eclipseDirectories = getDirectoriesByBuildFile(projectConfigurationFsPaths, [], ".project")
   // ignore the folders that already has .project file (already imported before)
   const gradleDirectories = getDirectoriesByBuildFile(projectConfigurationFsPaths, eclipseDirectories, ".gradle")
@@ -144,24 +144,38 @@ export async function hasBuildToolConflicts(): Promise<boolean> {
   })
 }
 
-export async function getBuildFilesInWorkspace(): Promise<Uri[]> {
-  const buildFiles: Uri[] = []
+export async function getBuildFilesInWorkspace(context: ExtensionContext): Promise<string[]> {
+  // const buildFiles: Uri[] = []
   const inclusionFilePatterns: string[] = getBuildFilePatterns()
+  context.logger.info('workspace.root:', workspace.root, 'inclusionFilePatterns:', inclusionFilePatterns);
   inclusionFilePatterns.push("**/.project")
   const inclusionFolderPatterns: string[] = getInclusionPatternsFromNegatedExclusion()
+  context.logger.info('inclusionFolderPatterns', inclusionFolderPatterns);
+  const pattern = convertToGlob(inclusionFilePatterns, inclusionFolderPatterns);
+
+  const found = await new Promise<string[]>((resolve, reject) => glob(pattern, {cwd: workspace.root, nodir: true}, (err, matches) => {
+    if (err)
+      reject(err);
+    else
+      resolve(matches.map(f => path.resolve(workspace.root, f)));
+  }));
+  context.logger.info('', found);
+  return found;
   // Since VS Code API does not support put negated exclusion pattern in findFiles(),
   // here we first parse the negated exclusion to inclusion and do the search.
-  if (inclusionFilePatterns.length > 0 && inclusionFolderPatterns.length > 0) {
-    buildFiles.push(...await workspace.findFiles(convertToGlob(inclusionFilePatterns, inclusionFolderPatterns), null /* force not use default exclusion */))
-  }
+  // if (inclusionFilePatterns.length > 0 && inclusionFolderPatterns.length > 0) {
+  //   buildFiles.push(...await workspace.findFiles(convertToGlob(inclusionFilePatterns, inclusionFolderPatterns), null /* force not use default exclusion */))
+  // }
+  // context.logger.info('found buildFiles', buildFiles);
 
-  const inclusionBlob: string = convertToGlob(inclusionFilePatterns)
-  const exclusionBlob: string = getExclusionBlob()
-  if (inclusionBlob) {
-    buildFiles.push(...await workspace.findFiles(inclusionBlob, exclusionBlob))
-  }
+  // const inclusionBlob: string = convertToGlob(inclusionFilePatterns)
+  // context.logger.info('inclusionBlob', inclusionBlob);
+  // if (inclusionBlob) {
+  //   buildFiles.push(...await workspace.findFiles(inclusionBlob, exclusionBlob))
+  // }
 
-  return buildFiles
+  // context.logger.info('found buildFiles eventually', buildFiles);
+  // return buildFiles
 }
 
 function getDirectoriesByBuildFile(inclusions: string[], exclusions: string[], fileName: string): string[] {

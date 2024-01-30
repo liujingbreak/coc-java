@@ -158,7 +158,7 @@ export async function checkJavaPreferences(context: ExtensionContext): Promise<{
   const allow = 'Allow'
   const disallow = 'Disallow'
   let preference: string = 'java.jdt.ls.java.home'
-  let javaHome = workspace.getConfiguration().inspect<string>('java.jdt.ls.java.home').workspaceValue
+  let javaHome = workspace.getConfiguration().inspect<string>('java.jdt.ls.java.home')?.workspaceValue
   let isVerified = javaHome === undefined || javaHome === null
   if (isVerified) {
     javaHome = getJavaConfiguration().get('jdt.ls.java.home')
@@ -166,7 +166,7 @@ export async function checkJavaPreferences(context: ExtensionContext): Promise<{
   const key = getKey(IS_WORKSPACE_JLS_JDK_ALLOWED, context.storagePath, javaHome)
   const globalState = context.globalState
   if (!isVerified) {
-    isVerified = false || globalState.get(key)
+    isVerified = false || !!globalState.get(key)
     if (isVerified === undefined) {
       await window.showErrorMessage(`Security Warning! Do you allow this workspace to set the java.jdt.ls.java.home variable? \n java.jdt.ls.java.home: ${javaHome}`, disallow, allow).then(async selection => {
         if (selection === allow) {
@@ -179,7 +179,7 @@ export async function checkJavaPreferences(context: ExtensionContext): Promise<{
       isVerified = globalState.get(key)
     }
     if (!isVerified) { // java.jdt.ls.java.home from workspace settings is disallowed.
-      javaHome = workspace.getConfiguration().inspect<string>('java.jdt.ls.java.home').globalValue
+      javaHome = workspace.getConfiguration().inspect<string>('java.jdt.ls.java.home')?.globalValue
     }
   }
 

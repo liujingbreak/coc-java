@@ -28,7 +28,6 @@ import { ACTIVE_BUILD_TOOL_STATE, cleanWorkspaceFileName, getJavaServerMode, onC
 import { StandardLanguageClient } from './standardLanguageClient'
 import { SyntaxLanguageClient } from './syntaxLanguageClient'
 import { convertToGlob, deleteDirectory, ensureExists, getBuildFilePatterns, getExclusionBlob, getInclusionPatternsFromNegatedExclusion, getJavaConfig, getJavaConfiguration, hasBuildToolConflicts, rangeIntersect } from './utils'
-import { checkAndDownloadJRE } from './jre'
 import glob = require('glob')
 
 const syntaxClient: SyntaxLanguageClient = new SyntaxLanguageClient()
@@ -96,6 +95,7 @@ export async function activate(context: ExtensionContext): Promise<ExtensionAPI>
     markdownPreviewProvider.show(context.asAbsolutePath(path.join('document', `${Commands.LEARN_MORE_ABOUT_CLEAN_UPS}.md`)), 'Java Clean Ups', "java-clean-ups", context)
   }))
   clientLogFile = path.join(storagePath, 'client.log')
+  context.logger.info('activating...');
   initializeLogFile(clientLogFile)
 
   enableJavadocSymbols()
@@ -107,6 +107,7 @@ export async function activate(context: ExtensionContext): Promise<ExtensionAPI>
   cleanJavaWorkspaceStorage()
 
   serverStatusBarProvider.initialize(context)
+  context.logger.info('status bar initialized...');
 
   return requirements.resolveRequirements(context).catch(error => {
     // show error
@@ -120,6 +121,7 @@ export async function activate(context: ExtensionContext): Promise<ExtensionAPI>
   }).then(async (requirements) => {
     const triggerFiles = await getTriggerFiles()
     return new Promise<ExtensionAPI>(async (resolve) => {
+      context.logger.info('after requirements check...');
       const id = createHash('md5').update(workspace.root).digest('hex')
       const workspacePath = path.resolve(`${storagePath}/jdt_ws_${id}`)
       const syntaxServerWorkspacePath = path.resolve(`${storagePath}/ss_ws`)
@@ -379,6 +381,7 @@ export async function activate(context: ExtensionContext): Promise<ExtensionAPI>
       }
 
       if (requireStandardServer) {
+        context.logger.info('startStandardServer...');
         await startStandardServer(context, requirements, clientOptions, workspacePath)
       }
       // context.subscriptions.push(workspace.onDidChangeTextDocument(event => handleTextBlockClosing(event.document, event.contentChanges)))
@@ -387,11 +390,13 @@ export async function activate(context: ExtensionContext): Promise<ExtensionAPI>
 }
 
 async function startStandardServer(context: ExtensionContext, requirements: requirements.RequirementsData, clientOptions: LanguageClientOptions, workspacePath: string) {
+  context.logger.info(standardClient.getClientStatus());
   if (standardClient.getClientStatus() !== ClientStatus.uninitialized) {
     return
   }
 
   const checkConflicts: boolean = await ensureNoBuildToolConflicts(context, clientOptions)
+  context.logger.info('checkConflicts', checkConflicts);
   if (!checkConflicts) {
     return
   }
@@ -402,6 +407,7 @@ async function startStandardServer(context: ExtensionContext, requirements: requ
     apiManager.fireDidServerModeChange(ServerMode.hybrid)
   }
   await standardClient.initialize(context, requirements, clientOptions, workspacePath, jdtEventEmitter)
+  context.logger.info('standardClient start...');
   standardClient.start()
   serverStatusBarProvider.showStandardStatus()
 }
@@ -432,12 +438,15 @@ async function ensureNoBuildToolConflicts(context: ExtensionContext, clientOptio
   if (isMavenEnabled && isGradleEnabled) {
     let activeBuildTool: string | undefined = context.workspaceState.get(ACTIVE_BUILD_TOOL_STATE)
     if (!activeBuildTool) {
-      if (!await hasBuildToolConflicts()) {
+      context.logger.info('wait hasBuildToolConflicts...');
+      if (!await hasBuildToolConflicts(context)) {
+        context.logger.info('done hasBuildToolConflicts');
         return true
       }
       activeBuildTool = await window.showInformationMessage("Build tool conflicts are detected in workspace. Which one would you like to use?", "Use Maven", "Use Gradle")
     }
 
+    context.logger.info('activeBuildTool:', activeBuildTool);
     if (!activeBuildTool) {
       return false // user cancels
     } else if (activeBuildTool.toLocaleLowerCase().includes("maven")) {

@@ -15,12 +15,12 @@ export function getPlatform(): string | undefined {
 }
 
 function registryUrl(home = os.homedir()): URL {
-  let res: URL
+  let res: URL | undefined;
   let filepath = path.join(home, '.npmrc')
   if (fse.existsSync(filepath)) {
+    let uri: string | undefined;
     try {
       let content = fse.readFileSync(filepath, 'utf8')
-      let uri: string
       for (let line of content.split(/\r?\n/)) {
         if (line.startsWith('#')) continue
         let ms = line.match(/^(.*?)=(.*)$/)
@@ -75,10 +75,9 @@ export async function checkAndDownloadJRE(context: ExtensionContext): Promise<st
   fse.moveSync(tmpfolder, folder, { overwrite: true })
   if (checkJavac(javaHome)) {
     const runtime = await getRuntime(javaHome, { withVersion: true })
-    if (runtime?.version?.major >= 17) {
+    if (runtime?.version?.major && runtime.version.major >= 17) {
       return javaHome
     }
   }
   return javaHome
-  return undefined
 }
